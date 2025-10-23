@@ -21,28 +21,28 @@ The application follows a classic microservice pattern. All user-facing requests
 ```mermaid
 graph TD
     subgraph "Browser (Client)"
-        UI[Frontend UI<br>(React, Port 3000)<br>Displays charts & data]
+        UI["Frontend UI<br>(React, Port 3000)<br>Displays charts & data"]
     end
 
     subgraph "Backend Infrastructure (Server-Side)"
-        Gateway[API Gateway<br>(Spring Cloud Gateway, Port 8080)<br>Routes /api/data/**]
-        Registry[Service Registry<br>(Netflix Eureka, Port 8761)<br>Handles service discovery]
+        Gateway["API Gateway<br>(Spring Cloud Gateway, Port 8080)<br>Routes /api/data/**"]
+        Registry["Service Registry<br>(Netflix Eureka, Port 8761)<br>Handles service discovery"]
         
         subgraph "Data Services"
-            DataSvc[Data Service<br>(Spring Boot, Port 8081)<br>Handles upload, validation, temp storage]
+            DataSvc["Data Service<br>(Spring Boot, Port 8081)<br>Handles upload, validation, temp storage"]
         end
 
         subgraph "Analytics Services"
-            AnalyticsSvc[Analytics Service<br>(Spring Boot, Port 8082)<br>Converts CSV to text, calls LLM]
+            AnalyticsSvc["Analytics Service<br>(Spring Boot, Port 8082)<br>Converts CSV to text, calls LLM"]
         end
     end
 
     subgraph "External Services"
-        LLM[External LLM API<br>(Google Gemini)]
+        LLM["External LLM API<br>(Google Gemini)"]
     end
 
     %% --- Connections ---
-    UI -- "POST /api/data/upload\n(proxied to 8080)" --> Gateway
+    UI -- "POST /api/data/upload<br>(proxied to 8080)" --> Gateway
     
     Gateway -- "Routes to lb://DATA-SERVICE" --> DataSvc
     
@@ -50,10 +50,9 @@ graph TD
     AnalyticsSvc -- "2. Registers" --> Registry
     Gateway -- "3. Discovers Services" --> Registry
     
-    DataSvc -- "POST /analyze\n(@LoadBalanced RestTemplate)" --> AnalyticsSvc
+    DataSvc -- "POST /analyze<br>(@LoadBalanced RestTemplate)" --> AnalyticsSvc
     
-    AnalyticsSvc -- "POST /generateContent\n(HTTPS API Call)" --> LLM
-
+    AnalyticsSvc -- "POST /generateContent<br>(HTTPS API Call)" --> LLM
 ```
 ## Technology Stack
 
