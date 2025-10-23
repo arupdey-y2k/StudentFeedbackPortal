@@ -1,0 +1,80 @@
+version: '3.8'
+
+services:
+
+  service-registry:
+    build:
+      context: ./service-registry
+      args:
+        JAR_FILE: target/service-registry-0.0.1-SNAPSHOT.jar
+    image: student-feedback/service-registry
+    ports:
+      - "8761:8761"
+    networks:
+      - feedback-network
+
+  api-gateway:
+    build:
+      context: ./api-gateway
+      args:
+        JAR_FILE: target/api-gateway-0.0.1-SNAPSHOT.jar
+    image: student-feedback/api-gateway
+    ports:
+      - "8080:8080"
+    environment:
+      # Link to the service registry
+      - EUREKA_CLIENT_SERVICEURL_DEFAULTZONE=http://service-registry:8761/eureka/
+    depends_on:
+      - service-registry
+    networks:
+      - feedback-network
+
+  data-service:
+    build:
+      context: ./data-service
+      args:
+        JAR_FILE: target/data-service-0.0.1-SNAPSHOT.jar
+    image: student-feedback/data-service
+    ports:
+      - "8081" # No host port, only accessible via gateway
+    environment:
+      - EUREKA_CLIENT_SERVICEURL_DEFAULTZONE=http://service-registry:8761/eureka/
+      - ANALYTICS_SERVICE_URL=http://analytics-service:8082/analyze
+      - FILE_UPLOAD_DIR=/app/uploads
+    volumes:
+      - ./data-uploads:/app/uploads # Persist uploads (optional, for debugging)
+    depends_on:
+      - service-registry
+    networks:
+      - feedback-network
+
+  analytics-service:
+    build:
+      context: ./analytics-service
+      args:
+        JAR_FILE: target/analytics-service-0.0.1-SNAPSHOT.jar
+    image: student-feedback/analytics-service
+    ports:
+      - "8082" # No host port
+    environment:
+      - EUREKA_CLIENT_SERVICEURL_DEFAULTZONE=http://service-registry:8761/eureka/
+      # IMPORTANT: Pass the API key from your host environment
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+    depends_on:
+      - service-registry
+    networks:
+      - feedback-network
+
+  frontend-ui:
+    build: ./frontend-ui
+    image: student-feedback/frontend-ui
+    ports:
+      - "3000:80" # Assuming the React app is served by nginx on port 80
+    depends_on:
+      - api-gateway
+    networks:
+      - feedback-network
+
+networks:
+  feedback-network:
+    driver: bridge
