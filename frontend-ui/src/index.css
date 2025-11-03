@@ -47,3 +47,12 @@ code {
 
 /* Muted text */
 .muted { color: #6b7280; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* Topbar auth area */
+.topbar { display:flex; align-items:center; justify-content:space-between; gap:12px; }
+.auth-area { display:flex; align-items:center; gap:12px; }
+.link { background:none; border:none; color:#2563eb; cursor:pointer; font-weight:600; }
+.link:hover { color:#1d4ed8; }
+.auth-user { display:flex; align-items:center; gap:8px; }
+.avatar { width:28px; height:28px; border-radius:9999px; }
+.user-name { font-weight:600; color:#374151; }

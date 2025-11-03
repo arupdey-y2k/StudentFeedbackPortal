@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { PieChart, Pie, Cell, Legend, Tooltip, ResponsiveContainer } from 'recharts';
 
 // Main App Component
@@ -20,6 +20,44 @@ function App() {
         } else {
             setFile(null);
             setFileName('');
+        }
+    };
+
+    const GATEWAY = process.env.REACT_APP_GATEWAY_URL || 'http://localhost:8080';
+
+    // Auth state
+    const [auth, setAuth] = useState({ authenticated: false, name: null, email: null, picture: null });
+
+    useEffect(() => {
+        // Fetch current user from gateway
+        const loadUser = async () => {
+            try {
+                const res = await fetch(`${GATEWAY}/auth/user`, { credentials: 'include' });
+                const data = await res.json();
+                setAuth({
+                    authenticated: !!data.authenticated,
+                    name: data.name || null,
+                    email: data.email || null,
+                    picture: data.picture || null,
+                });
+            } catch (e) {
+                setAuth({ authenticated: false, name: null, email: null, picture: null });
+            }
+        };
+        loadUser();
+    }, [GATEWAY]);
+
+    const handleLogin = () => {
+        window.location.href = `${GATEWAY}/oauth2/authorization/google`;
+    };
+
+    const handleLogout = async () => {
+        try {
+            await fetch(`${GATEWAY}/logout`, { method: 'POST', credentials: 'include' });
+        } catch (e) {
+            // ignore
+        } finally {
+            setAuth({ authenticated: false, name: null, email: null, picture: null });
         }
     };
 
@@ -45,9 +83,10 @@ function App() {
 
         try {
             // The 'proxy' in package.json will route this to http://localhost:8080
-            const response = await fetch('/api/data/upload', {
+            const response = await fetch(`${GATEWAY}/api/data/upload`, {
                 method: 'POST',
                 body: formData,
+                credentials: 'include',
             });
 
             if (!response.ok) {
@@ -105,7 +144,20 @@ function App() {
             <div className="frame">
                 {/* --- 1. TOP INPUT SECTION (Header Panel) --- */}
                 <header className="panel">
-                    <h1 style={{textAlign:'center'}} className="title">Student Feedback Analytics Portal</h1>
+                    <div className="topbar">
+                        <h1 className="title">Student Feedback Analytics Portal</h1>
+                        <div className="auth-area">
+                            {!auth.authenticated ? (
+                                <button type="button" className="link" onClick={handleLogin}>Signin</button>
+                            ) : (
+                                <div className="auth-user">
+                                    {auth.picture && <img src={auth.picture} alt="avatar" className="avatar" />}
+                                    <span className="user-name">{auth.name || auth.email}</span>
+                                    <button type="button" className="link" onClick={handleLogout}>Signout</button>
+                                </div>
+                            )}
+                        </div>
+                    </div>
                 </header>
 
                 {/* --- 2. Form Panel: File + CAPTCHA --- */}
@@ -146,7 +198,7 @@ function App() {
                     <button
                         type="submit"
                         form="uploadForm"
-                        disabled={loading}
+                        disabled={!auth.authenticated || loading}
                         className="btn btn-green"
                     >
                         {loading ? 'Analyzing...' : 'Upload & Analyze'}
