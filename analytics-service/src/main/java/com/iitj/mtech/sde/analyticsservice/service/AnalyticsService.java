@@ -7,7 +7,11 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.*;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
+import org.springframework.web.client.HttpStatusCodeException;
 import org.springframework.web.server.ResponseStatusException;
+
+import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
+import io.github.resilience4j.retry.annotation.Retry;
 
 import java.util.Collections;
 import java.util.HashMap;
@@ -32,6 +36,8 @@ public class AnalyticsService {
     @Value("${llm.api.url}")
     private String llmApiUrl;
 
+    @Retry(name = "llmApiRetry")
+    @CircuitBreaker(name = "llmApi", fallbackMethod = "getAnalyticsFromLlmFallback")
     public String getAnalyticsFromLlm(String csvData) {
         if (llmApiKey == null || llmApiKey.isEmpty()) {
             logger.error("API Key not found. Please set the GEMINI_API_KEY environment variable.");
@@ -147,9 +153,23 @@ public class AnalyticsService {
             return response.getBody();
 
 
+        } catch (HttpStatusCodeException e) {
+            if (e.getStatusCode() == HttpStatus.SERVICE_UNAVAILABLE) {
+                logger.warn("LLM API returned 503 (overloaded). Serving fallback analytics.");
+                return getAnalyticsFromLlmFallback(csvData, e);
+            }
+            logger.error("LLM API returned error status {}: {}", e.getStatusCode(), e.getResponseBodyAsString());
+            throw new ResponseStatusException(HttpStatus.BAD_GATEWAY, "LLM error: " + e.getStatusCode(), e);
         } catch (Exception e) {
             logger.error("Error calling LLM API", e);
-            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Error communicating with LLM", e);
+            return getAnalyticsFromLlmFallback(csvData, e);
         }
+    }
+
+    // Fallback when circuit is open or call fails/timeouts
+    private String getAnalyticsFromLlmFallback(String csvData, Throwable t) {
+        logger.error("LLM API unavailable, returning fallback analytics", t);
+        // Basic safe JSON to keep the UI functional
+        return "{\"error\":\"LLM_UNAVAILABLE\",\"message\":\"Please try again later\",\"sentiment\":{\"positive\":0,\"negative\":0,\"neutral\":100},\"keyThemes\":[]}";
     }
 }

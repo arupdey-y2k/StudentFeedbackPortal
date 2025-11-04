@@ -13,6 +13,9 @@ import org.springframework.util.MultiValueMap;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.multipart.MultipartFile;
 
+import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
+import io.github.resilience4j.retry.annotation.Retry;
+
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -79,6 +82,8 @@ public class FileStorageService {
         return targetLocation;
     }
 
+    @Retry(name = "analyticsServiceRetry")
+    @CircuitBreaker(name = "analyticsService", fallbackMethod = "forwardToAnalyticsFallback")
     public String forwardToAnalytics(Path filePath) throws IOException {
         logger.info("Forwarding file to Analytics Service: {}", filePath.getFileName());
 
@@ -97,7 +102,6 @@ public class FileStorageService {
         HttpEntity<MultiValueMap<String, Object>> requestEntity = new HttpEntity<>(body, headers);
 
         // Call the Analytics Service using its Eureka name
-        // The URL "http://ANALYTICS-SERVICE/analyze" will be resolved by Eureka
         ResponseEntity<String> response = restTemplate.postForEntity(
                 analyticsServiceUrl,
                 requestEntity,
@@ -110,6 +114,13 @@ public class FileStorageService {
             logger.error("Analytics Service returned error: {}", response.getStatusCode());
             throw new RuntimeException("Failed to get analysis from Analytics Service. Status: " + response.getStatusCode());
         }
+    }
+
+    // Fallback when circuit is open or call fails/timeouts
+    private String forwardToAnalyticsFallback(Path filePath, Throwable t) {
+        logger.error("Analytics Service unavailable, triggering fallback for file: {}", filePath != null ? filePath.getFileName() : "<null>", t);
+        // Return a graceful, minimally useful JSON payload
+        return "{\"error\":\"ANALYTICS_UNAVAILABLE\",\"message\":\"Please try again later\",\"sentiment\":{\"positive\":0,\"negative\":0,\"neutral\":0},\"keyThemes\":[]}";
     }
 
     public void deleteFile(Path filePath) {
